@@ -165,7 +165,7 @@ function App() {
             Марка и модель
             <input
               type="text"
-              placeholder="BMW 3 Series"
+              placeholder="ВАЗ 2114"
               value={carName}
               onChange={(e) => setCarName(e.target.value)}
             />
@@ -175,7 +175,7 @@ function App() {
             Цена автомобиля
             <input
               type="number"
-              placeholder="1 500 000"
+              placeholder="150 000"
               value={carPrice}
               onChange={(e) => setCarPrice(e.target.value)}
             />
@@ -236,7 +236,7 @@ function App() {
             <input
               type="number"
               min="0"
-              placeholder="30 000"
+              placeholder="9 000"
               value={insurance}
               onChange={(e) => setInsurance(e.target.value)}
             />
