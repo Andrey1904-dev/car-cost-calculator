@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
-  BrowserRouter,
+  HashRouter,
   NavLink,
   Navigate,
   Route,
@@ -61,7 +61,7 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="app">
         <header className="header">
           <div className="header-inner">
@@ -145,7 +145,7 @@ function App() {
           />
         </Routes>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
