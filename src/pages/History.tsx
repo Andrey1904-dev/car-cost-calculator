@@ -1,196 +1,290 @@
-import { useMemo, useState } from "react";
-import {
-  categories,
-  categoryIcons,
+import { useEffect, useMemo, useState } from "react";
+import type {
+  Expense,
+  UserName,
 } from "../types/expense";
-import type { Category } from "../types/expense";
+
 import {
-  getTotal,
-} from "../utils/calculations";
-import {
-  loadExpenses,
-  saveExpenses,
-} from "../utils/storage";
+  categoryIcons,
+  userIcons,
+} from "../types/expense";
+
+import { supabase } from "../lib/supabaseClient";
+
 import {
   formatDate,
 } from "../utils/dates";
 
+import {
+  loadExpenses,
+  deleteExpenseFromSupabase,
+} from "../utils/storage";
+
+type ExpenseFilter = "all" | UserName;
+
 function History() {
   const [expenses, setExpenses] =
-    useState(loadExpenses());
+    useState<Expense[]>([]);
 
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] =
-    useState<Category | "Все">("Все");
+  const [loading, setLoading] =
+    useState(true);
 
-  const [selectedMonth, setSelectedMonth] =
-    useState("");
+  const [selectedUser, setSelectedUser] =
+    useState<ExpenseFilter>("all");
 
-  const filteredExpenses = useMemo(() => {
-    return expenses
-      .filter((expense) => {
-        const matchesSearch =
-          search.trim() === "" ||
-          expense.category
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          expense.comment
-            .toLowerCase()
-            .includes(search.toLowerCase());
+  async function fetchExpenses() {
+    setLoading(true);
 
-        const matchesCategory =
-          selectedCategory === "Все" ||
-          expense.category === selectedCategory;
+    const data =
+      await loadExpenses();
 
-        const matchesMonth =
-          selectedMonth === "" ||
-          expense.date.startsWith(selectedMonth);
+    setExpenses(data);
+    setLoading(false);
+  }
 
-        return (
-          matchesSearch &&
-          matchesCategory &&
-          matchesMonth
-        );
-      })
-      .sort((a, b) => {
-        if (a.date !== b.date) {
-          return b.date.localeCompare(a.date);
-        }
+  useEffect(() => {
+    fetchExpenses();
+  }, []);
 
-        return b.id - a.id;
-      });
-  }, [
-    expenses,
-    search,
-    selectedCategory,
-    selectedMonth,
-  ]);
+  /*
+   * Realtime-синхронизация.
+   * Если второй человек добавил или удалил
+   * расход, история обновится автоматически.
+   */
+  useEffect(() => {
+    const channel = supabase
+      .channel("history-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "expenses",
+        },
+        async () => {
+          await fetchExpenses();
+        },
+      )
+      .subscribe();
 
-  const total = getTotal(filteredExpenses);
+    return () => {
+      supabase.removeChannel(
+        channel,
+      );
+    };
+  }, []);
 
-  function deleteExpense(id: number) {
-    const updatedExpenses = expenses.filter(
-      (expense) => expense.id !== id,
+  const filteredExpenses =
+    useMemo(() => {
+      if (selectedUser === "all") {
+        return expenses;
+      }
+
+      return expenses.filter(
+        (expense) =>
+          expense.userName ===
+          selectedUser,
+      );
+    }, [
+      expenses,
+      selectedUser,
+    ]);
+
+  const sortedExpenses =
+    useMemo(() => {
+      return filteredExpenses
+        .slice()
+        .sort((a, b) => {
+          const dateCompare =
+            b.date.localeCompare(
+              a.date,
+            );
+
+          if (dateCompare !== 0) {
+            return dateCompare;
+          }
+
+          return b.id - a.id;
+        });
+    }, [filteredExpenses]);
+
+  async function deleteExpense(
+    id: number,
+  ) {
+    const confirmed =
+      window.confirm(
+        "Удалить этот расход?",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const success =
+      await deleteExpenseFromSupabase(
+        id,
+      );
+
+    if (!success) {
+      alert(
+        "Не удалось удалить расход.",
+      );
+
+      return;
+    }
+
+    setExpenses((current) =>
+      current.filter(
+        (expense) =>
+          expense.id !== id,
+      ),
     );
-
-    setExpenses(updatedExpenses);
-    saveExpenses(updatedExpenses);
   }
 
-  function clearFilters() {
-    setSearch("");
-    setSelectedCategory("Все");
-    setSelectedMonth("");
-  }
+  const total =
+    filteredExpenses.reduce(
+      (sum, expense) =>
+        sum + expense.amount,
+      0,
+    );
 
   return (
     <main className="container">
       <h1>История</h1>
 
       <p className="subtitle">
-        Все ваши расходы в одном месте
+        Все расходы за всё время
       </p>
+
+      <section className="person-filter">
+        <button
+          type="button"
+          className={
+            selectedUser === "all"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser("all")
+          }
+        >
+          <span>🐰</span>
+
+          <strong>
+            Зайцы
+          </strong>
+
+          <small>
+            Общие расходы
+          </small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            selectedUser === "Заяц"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser("Заяц")
+          }
+        >
+          <span>
+            {userIcons.Заяц}
+          </span>
+
+          <strong>
+            Заяц
+          </strong>
+
+          <small>
+            Личные расходы
+          </small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            selectedUser ===
+            "Зайчонок"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser(
+              "Зайчонок",
+            )
+          }
+        >
+          <span>
+            {userIcons.Зайчонок}
+          </span>
+
+          <strong>
+            Зайчонок
+          </strong>
+
+          <small>
+            Личные расходы
+          </small>
+        </button>
+      </section>
 
       <section className="summary">
         <div className="summary-card">
-          <span>Найдено</span>
+          <span>
+            {selectedUser ===
+            "all"
+              ? "Все расходы"
+              : selectedUser}
+          </span>
+
+          <strong>
+            {total.toLocaleString(
+              "ru-RU",
+            )}{" "}
+            ₽
+          </strong>
+        </div>
+
+        <div className="summary-card">
+          <span>
+            Операций
+          </span>
 
           <strong>
             {filteredExpenses.length}
           </strong>
         </div>
-
-        <div className="summary-card">
-          <span>Сумма</span>
-
-          <strong>
-            {total.toLocaleString("ru-RU")} ₽
-          </strong>
-        </div>
       </section>
 
-      <section className="card">
-        <h2>Поиск и фильтры</h2>
+      {loading ? (
+        <p className="empty">
+          Загружаем историю...
+        </p>
+      ) : sortedExpenses.length ===
+        0 ? (
+        <p className="empty">
+          Расходов пока нет.
+        </p>
+      ) : (
+        <section className="expenses-section">
+          <h2>
+            {selectedUser ===
+            "all"
+              ? "Все расходы"
+              : `Расходы: ${selectedUser}`}
+          </h2>
 
-        <label>
-          Поиск
-
-          <input
-            type="text"
-            placeholder="Категория или комментарий"
-            value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-          />
-        </label>
-
-        <label>
-          Категория
-
-          <select
-            value={selectedCategory}
-            onChange={(event) =>
-              setSelectedCategory(
-                event.target
-                  .value as Category | "Все",
-              )
-            }
-          >
-            <option value="Все">
-              Все категории
-            </option>
-
-            {categories.map((category) => (
-              <option
-                key={category}
-                value={category}
-              >
-                {categoryIcons[category]}{" "}
-                {category}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Месяц
-
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(event) =>
-              setSelectedMonth(
-                event.target.value,
-              )
-            }
-          />
-        </label>
-
-        <button
-          className="current-month-button"
-          onClick={clearFilters}
-        >
-          Сбросить фильтры
-        </button>
-      </section>
-
-      <section className="expenses-section">
-        <h2>
-          Операции
-        </h2>
-
-        {filteredExpenses.length === 0 ? (
-          <p className="empty">
-            По выбранным параметрам расходов нет.
-          </p>
-        ) : (
           <div className="expense-list">
-            {filteredExpenses.map(
+            {sortedExpenses.map(
               (expense) => (
                 <div
                   className="expense"
-                  key={expense.id}
+                  key={
+                    expense.id
+                  }
                 >
                   <div className="expense-icon">
                     {
@@ -202,10 +296,22 @@ function History() {
 
                   <div className="expense-info">
                     <strong>
-                      {expense.category}
+                      {
+                        expense.category
+                      }
                     </strong>
 
                     <span>
+                      {
+                        userIcons[
+                          expense
+                            .userName
+                        ]
+                      }{" "}
+                      {
+                        expense.userName
+                      }{" "}
+                      •{" "}
                       {formatDate(
                         expense.date,
                       )}
@@ -224,6 +330,7 @@ function History() {
                   </strong>
 
                   <button
+                    type="button"
                     className="delete-button"
                     onClick={() =>
                       deleteExpense(
@@ -238,8 +345,8 @@ function History() {
               ),
             )}
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }

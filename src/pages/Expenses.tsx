@@ -1,9 +1,18 @@
-import { useState } from "react";
-import type { Category, Expense } from "../types/expense";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  Category,
+  Expense,
+  UserName,
+} from "../types/expense";
+
 import {
   categories,
   categoryIcons,
+  userIcons,
 } from "../types/expense";
+
+import { supabase } from "../lib/supabaseClient";
+
 import {
   getTotal,
   getCategoryTotals,
@@ -11,90 +20,239 @@ import {
   getLargestExpense,
   getMonthExpenses,
 } from "../utils/calculations";
+
 import {
   getToday,
   formatDate,
   monthNames,
 } from "../utils/dates";
+
 import {
   loadExpenses,
-  saveExpenses,
+  addExpenseToSupabase,
+  deleteExpenseFromSupabase,
 } from "../utils/storage";
+
+type ExpenseFilter = "all" | UserName;
+
+function getUserNameFromEmail(
+  email: string | undefined,
+): UserName {
+  if (
+    email?.toLowerCase() ===
+    "zaichonok@mail.ru"
+  ) {
+    return "Зайчонок";
+  }
+
+  return "Заяц";
+}
 
 function Expenses() {
   const today = getToday();
   const currentDate = new Date();
 
-  const [expenses, setExpenses] = useState<Expense[]>(
-    loadExpenses,
-  );
+  const [expenses, setExpenses] =
+    useState<Expense[]>([]);
 
-  const [amount, setAmount] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [adding, setAdding] =
+    useState(false);
+
+  const [amount, setAmount] =
+    useState("");
+
   const [category, setCategory] =
     useState<Category>("Продукты");
-  const [comment, setComment] = useState("");
+
+  const [comment, setComment] =
+    useState("");
+
   const [expenseDate, setExpenseDate] =
     useState(today);
 
+  const [userName, setUserName] =
+    useState<UserName>("Заяц");
+
+  const [filter, setFilter] =
+    useState<ExpenseFilter>("all");
+
   const [selectedYear, setSelectedYear] =
-    useState(currentDate.getFullYear());
+    useState(
+      currentDate.getFullYear(),
+    );
 
   const [selectedMonth, setSelectedMonth] =
-    useState(currentDate.getMonth());
+    useState(
+      currentDate.getMonth(),
+    );
 
-  const monthExpenses = getMonthExpenses(
-    expenses,
-    selectedYear,
-    selectedMonth,
-  );
+  useEffect(() => {
+    async function getCurrentUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  const todayExpenses = expenses.filter(
-    (expense) => expense.date === today,
-  );
+      const currentUserName =
+        getUserNameFromEmail(
+          user?.email,
+        );
 
-  const monthTotal = getTotal(monthExpenses);
-  const todayTotal = getTotal(todayExpenses);
+      setUserName(currentUserName);
+    }
 
-  const categoryTotals = getCategoryTotals(
-    monthExpenses,
-    categories,
-  );
+    getCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    async function fetchExpenses() {
+      setLoading(true);
+
+      const data =
+        await loadExpenses();
+
+      setExpenses(data);
+      setLoading(false);
+    }
+
+    fetchExpenses();
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("expenses-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "expenses",
+        },
+        async () => {
+          const updatedExpenses =
+            await loadExpenses();
+
+          setExpenses(updatedExpenses);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(
+        channel,
+      );
+    };
+  }, []);
+
+  const filteredExpenses =
+    useMemo(() => {
+      if (filter === "all") {
+        return expenses;
+      }
+
+      return expenses.filter(
+        (expense) =>
+          expense.userName === filter,
+      );
+    }, [expenses, filter]);
+
+  const monthExpenses =
+    useMemo(
+      () =>
+        getMonthExpenses(
+          filteredExpenses,
+          selectedYear,
+          selectedMonth,
+        ),
+      [
+        filteredExpenses,
+        selectedYear,
+        selectedMonth,
+      ],
+    );
+
+  const todayExpenses =
+    useMemo(
+      () =>
+        filteredExpenses.filter(
+          (expense) =>
+            expense.date === today,
+        ),
+      [filteredExpenses, today],
+    );
+
+  const monthTotal =
+    getTotal(monthExpenses);
+
+  const todayTotal =
+    getTotal(todayExpenses);
+
+  const categoryTotals =
+    getCategoryTotals(
+      monthExpenses,
+      categories,
+    );
 
   const averageDailyExpense =
-    getAverageDailyExpense(monthExpenses);
+    getAverageDailyExpense(
+      monthExpenses,
+    );
 
   const largestExpense =
-    getLargestExpense(monthExpenses);
+    getLargestExpense(
+      monthExpenses,
+    );
 
-  function addExpense() {
-    const numericAmount = Number(amount);
-
-    if (numericAmount <= 0) {
+  async function addExpense() {
+    if (adding) {
       return;
     }
 
-    const newExpense: Expense = {
-      id: Date.now(),
-      amount: numericAmount,
-      category,
-      date: expenseDate,
-      comment: comment.trim(),
-    };
+    const numericAmount =
+      Number(amount);
 
-    const updatedExpenses = [
-      ...expenses,
-      newExpense,
-    ];
+    if (
+      !Number.isFinite(
+        numericAmount,
+      ) ||
+      numericAmount <= 0
+    ) {
+      alert(
+        "Введите корректную сумму.",
+      );
 
-    setExpenses(updatedExpenses);
-    saveExpenses(updatedExpenses);
+      return;
+    }
+
+    setAdding(true);
+
+    const newExpense =
+      await addExpenseToSupabase({
+        userName,
+        amount: numericAmount,
+        category,
+        date: expenseDate,
+        comment: comment.trim(),
+      });
+
+    if (!newExpense) {
+      alert(
+        "Не удалось добавить расход.",
+      );
+
+      setAdding(false);
+      return;
+    }
 
     setAmount("");
     setComment("");
 
-    const selectedDate = new Date(
-      `${expenseDate}T00:00:00`,
-    );
+    const selectedDate =
+      new Date(
+        `${expenseDate}T00:00:00`,
+      );
 
     setSelectedYear(
       selectedDate.getFullYear(),
@@ -103,23 +261,56 @@ function Expenses() {
     setSelectedMonth(
       selectedDate.getMonth(),
     );
-  }
 
-  function deleteExpense(id: number) {
-    const updatedExpenses = expenses.filter(
-      (expense) => expense.id !== id,
-    );
+    const updatedExpenses =
+      await loadExpenses();
 
     setExpenses(updatedExpenses);
-    saveExpenses(updatedExpenses);
+
+    setAdding(false);
   }
 
-  function changeMonth(direction: number) {
-    const newDate = new Date(
-      selectedYear,
-      selectedMonth + direction,
-      1,
-    );
+  async function deleteExpense(
+    id: number,
+  ) {
+    const confirmed =
+      window.confirm(
+        "Удалить этот расход?",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const success =
+      await deleteExpenseFromSupabase(
+        id,
+      );
+
+    if (!success) {
+      alert(
+        "Не удалось удалить расход.",
+      );
+
+      return;
+    }
+
+    const updatedExpenses =
+      await loadExpenses();
+
+    setExpenses(updatedExpenses);
+  }
+
+  function changeMonth(
+    direction: number,
+  ) {
+    const newDate =
+      new Date(
+        selectedYear,
+        selectedMonth +
+          direction,
+        1,
+      );
 
     setSelectedYear(
       newDate.getFullYear(),
@@ -145,42 +336,133 @@ function Expenses() {
       <h1>Расходы</h1>
 
       <p className="subtitle">
-        Контролируйте ежедневные и ежемесячные расходы
+        Общие расходы Зайца и
+        Зайчонка
       </p>
 
-      <section className="summary">
-        <div className="summary-card">
-          <span>Сегодня</span>
+      <section className="person-filter">
+        <button
+          type="button"
+          className={
+            filter === "all"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setFilter("all")
+          }
+        >
+          <span>🐰</span>
 
           <strong>
-            {todayTotal.toLocaleString("ru-RU")} ₽
+            Зайцы
           </strong>
-        </div>
 
-        <div className="summary-card">
+          <small>
+            Общие расходы
+          </small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            filter === "Заяц"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setFilter("Заяц")
+          }
+        >
           <span>
-            {monthNames[selectedMonth]}{" "}
-            {selectedYear}
+            {userIcons.Заяц}
           </span>
 
           <strong>
-            {monthTotal.toLocaleString("ru-RU")} ₽
+            Заяц
           </strong>
-        </div>
 
-        <div className="summary-card">
-          <span>Средний расход</span>
+          <small>
+            Личные расходы
+          </small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            filter === "Зайчонок"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setFilter(
+              "Зайчонок",
+            )
+          }
+        >
+          <span>
+            {userIcons.Зайчонок}
+          </span>
 
           <strong>
-            {Math.round(
-              averageDailyExpense,
-            ).toLocaleString("ru-RU")}{" "}
+            Зайчонок
+          </strong>
+
+          <small>
+            Личные расходы
+          </small>
+        </button>
+      </section>
+
+      <section className="summary">
+        <div className="summary-card">
+          <span>
+            Сегодня
+          </span>
+
+          <strong>
+            {todayTotal.toLocaleString(
+              "ru-RU",
+            )}{" "}
             ₽
           </strong>
         </div>
 
         <div className="summary-card">
-          <span>Операций</span>
+          <span>
+            {monthNames[
+              selectedMonth
+            ]}{" "}
+            {selectedYear}
+          </span>
+
+          <strong>
+            {monthTotal.toLocaleString(
+              "ru-RU",
+            )}{" "}
+            ₽
+          </strong>
+        </div>
+
+        <div className="summary-card">
+          <span>
+            Средний расход
+          </span>
+
+          <strong>
+            {Math.round(
+              averageDailyExpense,
+            ).toLocaleString(
+              "ru-RU",
+            )}{" "}
+            ₽
+          </strong>
+        </div>
+
+        <div className="summary-card">
+          <span>
+            Операций
+          </span>
 
           <strong>
             {monthExpenses.length}
@@ -190,38 +472,69 @@ function Expenses() {
 
       <section className="month-selector">
         <button
-          onClick={() => changeMonth(-1)}
+          type="button"
+          onClick={() =>
+            changeMonth(-1)
+          }
         >
           ←
         </button>
 
         <div>
           <strong>
-            {monthNames[selectedMonth]}{" "}
+            {monthNames[
+              selectedMonth
+            ]}{" "}
             {selectedYear}
           </strong>
 
           <span>
-            {monthExpenses.length} операций
+            {loading
+              ? "Загрузка..."
+              : `${monthExpenses.length} операций`}
           </span>
         </div>
 
         <button
-          onClick={() => changeMonth(1)}
+          type="button"
+          onClick={() =>
+            changeMonth(1)
+          }
         >
           →
         </button>
       </section>
 
       <button
+        type="button"
         className="current-month-button"
-        onClick={goToCurrentMonth}
+        onClick={
+          goToCurrentMonth
+        }
       >
         Текущий месяц
       </button>
 
       <section className="card">
-        <h2>Добавить расход</h2>
+        <h2>
+          Добавить расход
+        </h2>
+
+        <div className="current-user">
+          <span>
+            {userIcons[userName]}
+          </span>
+
+          <div>
+            <small>
+              Расход добавляет
+            </small>
+
+            <strong>
+              {userName}
+            </strong>
+          </div>
+        </div>
 
         <label>
           Дата
@@ -266,15 +579,21 @@ function Expenses() {
               )
             }
           >
-            {categories.map((item) => (
-              <option
-                key={item}
-                value={item}
-              >
-                {categoryIcons[item]}{" "}
-                {item}
-              </option>
-            ))}
+            {categories.map(
+              (item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {
+                    categoryIcons[
+                      item
+                    ]
+                  }{" "}
+                  {item}
+                </option>
+              ),
+            )}
           </select>
         </label>
 
@@ -294,10 +613,18 @@ function Expenses() {
         </label>
 
         <button
+          type="button"
           className="add-button"
-          onClick={addExpense}
+          onClick={
+            addExpense
+          }
+          disabled={
+            loading || adding
+          }
         >
-          + Добавить расход
+          {adding
+            ? "Добавляем..."
+            : "+ Добавить расход"}
         </button>
       </section>
 
@@ -306,20 +633,25 @@ function Expenses() {
           Структура расходов
         </h2>
 
-        {categoryTotals.length === 0 ? (
+        {categoryTotals.length ===
+        0 ? (
           <p className="empty">
-            В этом месяце расходов пока нет.
+            В этом месяце
+            расходов пока
+            нет.
           </p>
         ) : (
-          <div className="category-list">
+          <div className="expense-structure">
             {categoryTotals.map(
               (item) => (
                 <div
-                  className="category-row"
-                  key={item.category}
+                  className="expense-structure-item"
+                  key={
+                    item.category
+                  }
                 >
-                  <div className="category-name">
-                    <span>
+                  <div className="expense-structure-name">
+                    <span className="expense-structure-icon">
                       {
                         categoryIcons[
                           item.category
@@ -328,11 +660,13 @@ function Expenses() {
                     </span>
 
                     <strong>
-                      {item.category}
+                      {
+                        item.category
+                      }
                     </strong>
                   </div>
 
-                  <strong>
+                  <strong className="expense-structure-amount">
                     {item.total.toLocaleString(
                       "ru-RU",
                     )}{" "}
@@ -347,7 +681,10 @@ function Expenses() {
 
       {largestExpense && (
         <section className="card">
-          <h2>Самый большой расход</h2>
+          <h2>
+            Самый большой
+            расход
+          </h2>
 
           <div className="largest-expense">
             <span>
@@ -367,7 +704,9 @@ function Expenses() {
               </strong>
 
               <p>
-                {largestExpense.category}
+                {
+                  largestExpense.category
+                }
               </p>
             </div>
           </div>
@@ -382,64 +721,89 @@ function Expenses() {
           ].toLowerCase()}
         </h2>
 
-        {monthExpenses.length === 0 ? (
+        {loading ? (
           <p className="empty">
-            В этом месяце расходов ещё нет.
+            Загружаем
+            расходы...
+          </p>
+        ) : monthExpenses.length ===
+          0 ? (
+          <p className="empty">
+            В этом месяце
+            расходов ещё
+            нет.
           </p>
         ) : (
           <div className="expense-list">
             {monthExpenses
               .slice()
               .reverse()
-              .map((expense) => (
-                <div
-                  className="expense"
-                  key={expense.id}
-                >
-                  <div className="expense-icon">
-                    {
-                      categoryIcons[
-                        expense.category
-                      ]
+              .map(
+                (expense) => (
+                  <div
+                    className="expense"
+                    key={
+                      expense.id
                     }
-                  </div>
+                  >
+                    <div className="expense-icon">
+                      {
+                        categoryIcons[
+                          expense.category
+                        ]
+                      }
+                    </div>
 
-                  <div className="expense-info">
-                    <strong>
-                      {expense.category}
+                    <div className="expense-info">
+                      <strong>
+                        {
+                          expense.category
+                        }
+                      </strong>
+
+                      <span>
+                        {
+                          userIcons[
+                            expense
+                              .userName
+                          ]
+                        }{" "}
+                        {
+                          expense.userName
+                        }{" "}
+                        •{" "}
+                        {formatDate(
+                          expense.date,
+                        )}
+
+                        {expense.comment
+                          ? ` • ${expense.comment}`
+                          : ""}
+                      </span>
+                    </div>
+
+                    <strong className="expense-amount">
+                      {expense.amount.toLocaleString(
+                        "ru-RU",
+                      )}{" "}
+                      ₽
                     </strong>
 
-                    <span>
-                      {formatDate(
-                        expense.date,
-                      )}
-
-                      {expense.comment
-                        ? ` • ${expense.comment}`
-                        : ""}
-                    </span>
+                    <button
+                      type="button"
+                      className="delete-button"
+                      onClick={() =>
+                        deleteExpense(
+                          expense.id,
+                        )
+                      }
+                      aria-label="Удалить расход"
+                    >
+                      ×
+                    </button>
                   </div>
-
-                  <strong className="expense-amount">
-                    {expense.amount.toLocaleString(
-                      "ru-RU",
-                    )}{" "}
-                    ₽
-                  </strong>
-
-                  <button
-                    className="delete-button"
-                    onClick={() =>
-                      deleteExpense(
-                        expense.id,
-                      )
-                    }
-                    aria-label="Удалить расход"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+                ),
+              )}
           </div>
         )}
       </section>

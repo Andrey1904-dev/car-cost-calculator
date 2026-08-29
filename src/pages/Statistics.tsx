@@ -1,8 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import type {
+  Expense,
+  UserName,
+} from "../types/expense";
+
 import {
   categories,
   categoryIcons,
+  userIcons,
 } from "../types/expense";
+
+import { supabase } from "../lib/supabaseClient";
+
 import {
   getAverageDailyExpense,
   getCategoryTotals,
@@ -10,60 +20,142 @@ import {
   getMonthExpenses,
   getTotal,
 } from "../utils/calculations";
-import { loadExpenses } from "../utils/storage";
+
 import { monthNames } from "../utils/dates";
+
+import { loadExpenses } from "../utils/storage";
+
+type ExpenseFilter = "all" | UserName;
 
 function Statistics() {
   const today = new Date();
 
-  const [selectedYear, setSelectedYear] = useState(
-    today.getFullYear(),
-  );
+  const [expenses, setExpenses] =
+    useState<Expense[]>([]);
 
-  const [selectedMonth, setSelectedMonth] = useState(
-    today.getMonth(),
-  );
+  const [loading, setLoading] =
+    useState(true);
 
-  const expenses = loadExpenses();
+  const [selectedUser, setSelectedUser] =
+    useState<ExpenseFilter>("all");
 
+  const [selectedYear, setSelectedYear] =
+    useState(today.getFullYear());
+
+  const [selectedMonth, setSelectedMonth] =
+    useState(today.getMonth());
+
+  // Первичная загрузка
+  useEffect(() => {
+    async function fetchExpenses() {
+      setLoading(true);
+
+      const data = await loadExpenses();
+
+      setExpenses(data);
+      setLoading(false);
+    }
+
+    fetchExpenses();
+  }, []);
+
+  // Realtime
+  useEffect(() => {
+    const channel = supabase
+      .channel("statistics-expenses-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "expenses",
+        },
+        async () => {
+          const updatedExpenses =
+            await loadExpenses();
+
+          setExpenses(updatedExpenses);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Фильтр пользователя
+  const filteredExpenses = useMemo(() => {
+    if (selectedUser === "all") {
+      return expenses;
+    }
+
+    return expenses.filter(
+      (expense) =>
+        expense.userName === selectedUser,
+    );
+  }, [expenses, selectedUser]);
+
+  // Расходы выбранного месяца
   const monthExpenses = useMemo(
     () =>
       getMonthExpenses(
-        expenses,
+        filteredExpenses,
         selectedYear,
         selectedMonth,
       ),
-    [expenses, selectedYear, selectedMonth],
+    [
+      filteredExpenses,
+      selectedYear,
+      selectedMonth,
+    ],
   );
 
-  const previousDate = new Date(
-    selectedYear,
-    selectedMonth - 1,
-    1,
+  // Предыдущий месяц
+  const previousDate = useMemo(
+    () =>
+      new Date(
+        selectedYear,
+        selectedMonth - 1,
+        1,
+      ),
+    [selectedYear, selectedMonth],
   );
 
-  const previousMonthExpenses = getMonthExpenses(
-    expenses,
-    previousDate.getFullYear(),
-    previousDate.getMonth(),
-  );
+  const previousMonthExpenses =
+    useMemo(
+      () =>
+        getMonthExpenses(
+          filteredExpenses,
+          previousDate.getFullYear(),
+          previousDate.getMonth(),
+        ),
+      [
+        filteredExpenses,
+        previousDate,
+      ],
+    );
 
   const total = getTotal(monthExpenses);
 
-  const previousTotal = getTotal(
-    previousMonthExpenses,
-  );
+  const previousTotal =
+    getTotal(previousMonthExpenses);
 
   const averageDaily =
-    getAverageDailyExpense(monthExpenses);
+    getAverageDailyExpense(
+      monthExpenses,
+    );
 
-  const categoryTotals = getCategoryTotals(
-    monthExpenses,
-    categories,
-  );
+  const categoryTotals =
+    getCategoryTotals(
+      monthExpenses,
+      categories,
+    );
 
   const largestExpense =
-    getLargestExpense(monthExpenses);
+    getLargestExpense(
+      monthExpenses,
+    );
 
   const uniqueDays = new Set(
     monthExpenses.map(
@@ -71,25 +163,40 @@ function Statistics() {
     ),
   ).size;
 
+  // Расходы по дням
   const dailyTotals = useMemo(() => {
-    const totals: Record<string, number> = {};
+    const totals: Record<
+      string,
+      number
+    > = {};
 
-    monthExpenses.forEach((expense) => {
-      totals[expense.date] =
-        (totals[expense.date] || 0) +
-        expense.amount;
-    });
+    monthExpenses.forEach(
+      (expense) => {
+        totals[expense.date] =
+          (totals[expense.date] ||
+            0) + expense.amount;
+      },
+    );
 
     return Object.entries(totals)
       .map(([date, amount]) => ({
         date,
         amount,
       }))
-      .sort((a, b) => b.amount - a.amount);
+      .sort((a, b) => {
+        if (b.amount !== a.amount) {
+          return b.amount - a.amount;
+        }
+
+        return b.date.localeCompare(
+          a.date,
+        );
+      });
   }, [monthExpenses]);
 
   const largestDay = dailyTotals[0];
 
+  // Изменение относительно прошлого месяца
   let monthDifference = 0;
 
   if (previousTotal > 0) {
@@ -99,7 +206,9 @@ function Statistics() {
       100;
   }
 
-  function changeMonth(direction: number) {
+  function changeMonth(
+    direction: number,
+  ) {
     const newDate = new Date(
       selectedYear,
       selectedMonth + direction,
@@ -115,45 +224,164 @@ function Statistics() {
     );
   }
 
+  function goToCurrentMonth() {
+    setSelectedYear(
+      today.getFullYear(),
+    );
+
+    setSelectedMonth(
+      today.getMonth(),
+    );
+  }
+
+  const currentMonthName =
+    monthNames[selectedMonth];
+
+  const previousMonthName =
+    monthNames[
+      previousDate.getMonth()
+    ];
+
   return (
     <main className="container">
       <h1>Статистика</h1>
 
       <p className="subtitle">
-        Подробный анализ ваших расходов
+        Анализ расходов Зайца и
+        Зайчонка
       </p>
+
+      {/* Пользователь */}
+
+      <section className="person-filter">
+        <button
+          className={
+            selectedUser === "all"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser("all")
+          }
+        >
+          <span>🐰</span>
+
+          <strong>Зайцы</strong>
+
+          <small>
+            Общие расходы
+          </small>
+        </button>
+
+        <button
+          className={
+            selectedUser === "Заяц"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser("Заяц")
+          }
+        >
+          <span>
+            {userIcons.Заяц}
+          </span>
+
+          <strong>Заяц</strong>
+
+          <small>
+            Личные расходы
+          </small>
+        </button>
+
+        <button
+          className={
+            selectedUser === "Зайчонок"
+              ? "person-filter-button active"
+              : "person-filter-button"
+          }
+          onClick={() =>
+            setSelectedUser(
+              "Зайчонок",
+            )
+          }
+        >
+          <span>
+            {userIcons.Зайчонок}
+          </span>
+
+          <strong>
+            Зайчонок
+          </strong>
+
+          <small>
+            Личные расходы
+          </small>
+        </button>
+      </section>
+
+      {/* Месяц */}
 
       <section className="month-selector">
         <button
-          onClick={() => changeMonth(-1)}
+          onClick={() =>
+            changeMonth(-1)
+          }
+          aria-label="Предыдущий месяц"
         >
           ←
         </button>
 
         <div>
           <strong>
-            {monthNames[selectedMonth]}{" "}
+            {currentMonthName}{" "}
             {selectedYear}
           </strong>
 
           <span>
-            {monthExpenses.length} операций
+            {loading
+              ? "Загрузка..."
+              : `${monthExpenses.length} ${
+                  monthExpenses.length ===
+                  1
+                    ? "операция"
+                    : "операций"
+                }`}
           </span>
         </div>
 
         <button
-          onClick={() => changeMonth(1)}
+          onClick={() =>
+            changeMonth(1)
+          }
+          aria-label="Следующий месяц"
         >
           →
         </button>
       </section>
 
+      <button
+        className="current-month-button"
+        onClick={
+          goToCurrentMonth
+        }
+      >
+        Текущий месяц
+      </button>
+
+      {/* Сводка */}
+
       <section className="summary">
         <div className="summary-card">
-          <span>Всего за месяц</span>
+          <span>
+            Всего за месяц
+          </span>
 
           <strong>
-            {total.toLocaleString("ru-RU")} ₽
+            {total.toLocaleString(
+              "ru-RU",
+            )}{" "}
+            ₽
           </strong>
         </div>
 
@@ -165,7 +393,9 @@ function Statistics() {
           <strong>
             {Math.round(
               averageDaily,
-            ).toLocaleString("ru-RU")}{" "}
+            ).toLocaleString(
+              "ru-RU",
+            )}{" "}
             ₽
           </strong>
         </div>
@@ -175,7 +405,9 @@ function Statistics() {
             Дней с расходами
           </span>
 
-          <strong>{uniqueDays}</strong>
+          <strong>
+            {uniqueDays}
+          </strong>
         </div>
 
         <div className="summary-card">
@@ -187,37 +419,53 @@ function Statistics() {
         </div>
       </section>
 
+      {/* Сравнение */}
+
       <section className="card">
         <h2>
-          Сравнение с прошлым месяцем
+          Сравнение с прошлым
+          месяцем
         </h2>
 
-        <div className="comparison">
-          <strong>
-            {monthDifference === 0
-              ? "Нет данных"
-              : `${Math.abs(
-                  Math.round(
-                    monthDifference,
-                  ),
-                )}%`}
-          </strong>
+        {previousTotal === 0 ? (
+          <div className="comparison">
+            <strong>
+              Нет данных
+            </strong>
 
-          <span>
-            {monthDifference > 0
-              ? "Расходы выросли"
-              : monthDifference < 0
-                ? "Расходы снизились"
-                : "Сравнить пока невозможно"}
-          </span>
-        </div>
+            <span>
+              За прошлый месяц
+              расходов нет
+            </span>
+          </div>
+        ) : (
+          <div className="comparison">
+            <strong>
+              {monthDifference > 0
+                ? "+"
+                : ""}
+              {Math.round(
+                monthDifference,
+              )}
+              %
+            </strong>
+
+            <span>
+              {monthDifference >
+              0
+                ? "Расходы выросли"
+                : monthDifference <
+                    0
+                  ? "Расходы снизились"
+                  : "Расходы не изменились"}
+            </span>
+          </div>
+        )}
 
         <div className="comparison-values">
           <div>
             <span>
-              {monthNames[
-                selectedMonth
-              ]}
+              {currentMonthName}
             </span>
 
             <strong>
@@ -230,9 +478,7 @@ function Statistics() {
 
           <div>
             <span>
-              {monthNames[
-                previousDate.getMonth()
-              ]}
+              {previousMonthName}
             </span>
 
             <strong>
@@ -245,21 +491,21 @@ function Statistics() {
         </div>
       </section>
 
-      {/* =========================
-          РАСХОДЫ ПО КАТЕГОРИЯМ
-      ========================= */}
+      {/* Категории */}
 
       <section className="card">
         <h2>
           Расходы по категориям
         </h2>
 
-        {categoryTotals.length === 0 ? (
+        {categoryTotals.length ===
+        0 ? (
           <p className="empty">
-            За этот месяц расходов нет.
+            За этот месяц
+            расходов нет.
           </p>
         ) : (
-          <div className="expense-structure">
+          <div className="statistics-list">
             {categoryTotals.map(
               (item) => {
                 const percentage =
@@ -271,12 +517,14 @@ function Statistics() {
 
                 return (
                   <div
-                    className="expense-structure-item"
-                    key={item.category}
+                    className="statistic-item"
+                    key={
+                      item.category
+                    }
                   >
-                    <div className="expense-structure-top">
-                      <div className="expense-structure-name">
-                        <span className="expense-structure-icon">
+                    <div className="statistic-header">
+                      <div>
+                        <span>
                           {
                             categoryIcons[
                               item.category
@@ -285,11 +533,13 @@ function Statistics() {
                         </span>
 
                         <strong>
-                          {item.category}
+                          {
+                            item.category
+                          }
                         </strong>
                       </div>
 
-                      <strong className="expense-structure-amount">
+                      <strong>
                         {item.total.toLocaleString(
                           "ru-RU",
                         )}{" "}
@@ -310,7 +560,7 @@ function Statistics() {
                       {percentage.toFixed(
                         1,
                       )}
-                      % от всех расходов
+                      %
                     </span>
                   </div>
                 );
@@ -320,14 +570,13 @@ function Statistics() {
         )}
       </section>
 
-      {/* =========================
-          САМАЯ ДОРОГАЯ ОПЕРАЦИЯ
-      ========================= */}
+      {/* Самый большой расход */}
 
       {largestExpense && (
         <section className="card">
           <h2>
-            Самая дорогая операция
+            Самая дорогая
+            операция
           </h2>
 
           <div className="largest-expense">
@@ -348,7 +597,9 @@ function Statistics() {
               </strong>
 
               <p>
-                {largestExpense.category}
+                {
+                  largestExpense.category
+                }
               </p>
 
               <small>
@@ -359,14 +610,13 @@ function Statistics() {
         </section>
       )}
 
-      {/* =========================
-          САМЫЙ ДОРОГОЙ ДЕНЬ
-      ========================= */}
+      {/* Самый дорогой день */}
 
       {largestDay && (
         <section className="card">
           <h2>
-            Самый дорогой день
+            Самый дорогой
+            день
           </h2>
 
           <div className="largest-day">
@@ -384,16 +634,15 @@ function Statistics() {
         </section>
       )}
 
-      {/* =========================
-          САМЫЕ ДОРОГИЕ ДНИ
-      ========================= */}
+      {/* Топ дней */}
 
       <section className="card">
         <h2>
           Самые дорогие дни
         </h2>
 
-        {dailyTotals.length === 0 ? (
+        {dailyTotals.length ===
+        0 ? (
           <p className="empty">
             Данных пока нет.
           </p>

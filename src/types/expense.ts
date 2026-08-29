@@ -1,3 +1,8 @@
+export type UserName =
+  | "Заяц"
+  | "Зайчонок"
+  | "Зайцы";
+
 export type Category =
   | "Продукты"
   | "Фаст фуд"
@@ -15,6 +20,7 @@ export type Category =
 
 export type Expense = {
   id: number;
+  userName: UserName;
   amount: number;
   category: Category;
   date: string;
@@ -51,4 +57,10 @@ export const categoryIcons: Record<Category, string> = {
   "Подписка на VPN анти руки загребуки": "🔐",
   Кредиты: "😡",
   Другое: "💰",
+};
+
+export const userIcons: Record<UserName, string> = {
+  Заяц: "🦊",
+  Зайчонок: "🐇",
+  Зайцы: "🐰",
 };
