@@ -64,3 +64,58 @@ export function getLargestExpense(
       : largest,
   );
 }
+
+export function getBudgetForecast(
+  expenses: Expense[],
+  year: number,
+  month: number,
+) {
+  if (expenses.length === 0) {
+    return {
+      averagePerDay: 0,
+      daysWithExpenses: 0,
+      daysRemaining: 0,
+      forecast: 0,
+    };
+  }
+
+  const total = getTotal(expenses);
+
+  const uniqueDays = new Set(
+    expenses.map((expense) => expense.date),
+  );
+
+  const daysWithExpenses = uniqueDays.size;
+  const averagePerDay = total / daysWithExpenses;
+
+  const now = new Date();
+  const isCurrentMonth =
+    now.getFullYear() === year &&
+    now.getMonth() === month;
+
+  const daysInMonth = new Date(
+    year,
+    month + 1,
+    0,
+  ).getDate();
+
+  const currentDay = isCurrentMonth
+    ? now.getDate()
+    : daysInMonth;
+
+  const daysRemaining = Math.max(
+    daysInMonth - currentDay,
+    0,
+  );
+
+  const forecast =
+    total + averagePerDay * daysRemaining;
+
+  return {
+    averagePerDay,
+    daysWithExpenses,
+    daysRemaining,
+    forecast,
+  };
+}
+

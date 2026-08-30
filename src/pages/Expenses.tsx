@@ -419,6 +419,7 @@ function Expenses() {
         year={selectedYear}
         month={selectedMonth}
         spent={monthTotal}
+        expenses={monthExpenses}
       />
 
       <section className="summary">
