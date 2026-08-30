@@ -649,7 +649,6 @@ function Expenses() {
 
         <label>
           Сумма
-
           <input
             type="number"
             min="0"
@@ -664,36 +663,58 @@ function Expenses() {
           />
         </label>
 
-        <label>
-          Категория
+        <div className="quick-amounts">
+          {[100, 500, 1000, 2000, 5000].map(
+            (quickAmount) => (
+              <button
+                key={quickAmount}
+                type="button"
+                className="quick-amount-button"
+                onClick={() =>
+                  setAmount(
+                    String(quickAmount),
+                  )
+                }
+              >
+                {quickAmount.toLocaleString(
+                  "ru-RU",
+                )} ₽
+              </button>
+            ),
+          )}
+        </div>
 
-          <select
-            value={category}
-            onChange={(event) =>
-              setCategory(
-                event.target
-                  .value as Category,
-              )
-            }
-          >
+        <div className="category-picker">
+          <span className="category-picker-label">
+            Категория
+          </span>
+
+          <div className="category-grid">
             {categories.map(
               (item) => (
-                <option
+                <button
                   key={item}
-                  value={item}
+                  type="button"
+                  className={
+                    category === item
+                      ? "category-button active"
+                      : "category-button"
+                  }
+                  onClick={() =>
+                    setCategory(item)
+                  }
                 >
-                  {
-                    categoryIcons[
-                      item
-                    ]
-                  }{" "}
-                  {item}
-                </option>
+                  <span className="category-button-icon">
+                    {categoryIcons[item]}
+                  </span>
+                  <span className="category-button-name">
+                    {item}
+                  </span>
+                </button>
               ),
             )}
-          </select>
-        </label>
-
+          </div>
+        </div>
         <label>
           Комментарий
 

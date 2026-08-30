@@ -1697,3 +1697,105 @@ textarea:focus {
     font-size: 11px;
   }
 }
+/* Быстрый ввод суммы */
+.quick-amounts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.quick-amount-button {
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--card-background, #fff);
+  color: inherit;
+  border-radius: 10px;
+  padding: 10px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.quick-amount-button:hover {
+  border-color: currentColor;
+}
+
+.quick-amount-button:active {
+  transform: scale(0.97);
+}
+
+/* Выбор категории */
+.category-picker {
+  margin-bottom: 20px;
+}
+
+.category-picker-label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.category-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 76px;
+  padding: 10px 6px;
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--card-background, #fff);
+  color: inherit;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.category-button:hover {
+  border-color: currentColor;
+}
+
+.category-button:active {
+  transform: scale(0.97);
+}
+
+.category-button.active {
+  border: 2px solid currentColor;
+  font-weight: 700;
+}
+
+.category-button-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.category-button-name {
+  font-size: 13px;
+  text-align: center;
+}
+
+/* На маленьких экранах */
+@media (max-width: 480px) {
+  .quick-amounts {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
