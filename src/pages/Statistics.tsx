@@ -24,6 +24,15 @@ import {
 import { monthNames } from "../utils/dates";
 
 import { loadExpenses } from "../utils/storage";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
 type ExpenseFilter = "all" | UserName;
 
@@ -183,7 +192,53 @@ function Statistics() {
         date,
         amount,
       }))
-      .sort((a, b) => {
+      .sort((a, b) =>
+        a.date.localeCompare(b.date),
+      );
+  }, [monthExpenses]);
+
+  const chartData = useMemo(() => {
+    const daysInMonth = new Date(
+      selectedYear,
+      selectedMonth + 1,
+      0,
+    ).getDate();
+
+    const totalsMap = new Map(
+      dailyTotals.map((item) => [
+        item.date,
+        item.amount,
+      ]),
+    );
+
+    return Array.from(
+      { length: daysInMonth },
+      (_, index) => {
+        const day = index + 1;
+
+        const date = `${selectedYear}-${String(
+          selectedMonth + 1,
+        ).padStart(2, "0")}-${String(day).padStart(
+          2,
+          "0",
+        )}`;
+
+        return {
+          date,
+          day,
+          amount: totalsMap.get(date) ?? 0,
+        };
+      },
+    );
+  }, [
+    dailyTotals,
+    selectedYear,
+    selectedMonth,
+  ]);
+
+  const topDays = useMemo(
+    () =>
+      dailyTotals.slice().sort((a, b) => {
         if (b.amount !== a.amount) {
           return b.amount - a.amount;
         }
@@ -191,10 +246,11 @@ function Statistics() {
         return b.date.localeCompare(
           a.date,
         );
-      });
-  }, [monthExpenses]);
+      }),
+    [dailyTotals],
+  );
 
-  const largestDay = dailyTotals[0];
+  const largestDay = topDays[0];
 
   // Изменение относительно прошлого месяца
   let monthDifference = 0;
@@ -638,35 +694,66 @@ function Statistics() {
 
       <section className="card">
         <h2>
-          Самые дорогие дни
+          Расходы по дням
         </h2>
 
-        {dailyTotals.length ===
-        0 ? (
+        {monthExpenses.length === 0 ? (
           <p className="empty">
             Данных пока нет.
           </p>
         ) : (
-          <div className="daily-list">
-            {dailyTotals
-              .slice(0, 7)
-              .map((day) => (
-                <div
-                  className="daily-row"
-                  key={day.date}
-                >
-                  <span>
-                    {day.date}
-                  </span>
+          <div
+            style={{
+              width: "100%",
+              height: 300,
+            }}
+          >
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 0,
+                  bottom: 10,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                />
 
-                  <strong>
-                    {day.amount.toLocaleString(
-                      "ru-RU",
-                    )}{" "}
-                    ₽
-                  </strong>
-                </div>
-              ))}
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12 }}
+                />
+
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) =>
+                    `${Number(value).toLocaleString("ru-RU")} ₽`
+                  }
+                />
+
+                <Tooltip
+                  formatter={(value) =>
+                    `${Number(value).toLocaleString("ru-RU")} ₽`
+                  }
+                  labelFormatter={(day) =>
+                    `День ${day}`
+                  }
+                />
+
+                <Bar
+                  dataKey="amount"
+                  name="Расходы"
+                  radius={[5, 5, 0, 0]}
+                  maxBarSize={28}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
       </section>
