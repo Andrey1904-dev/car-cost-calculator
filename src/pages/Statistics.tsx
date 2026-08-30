@@ -648,6 +648,72 @@ function Statistics() {
           </>
         )}
       </section>
+      {/* График расходов по дням */}
+      <section className="card">
+        <h2>Расходы по дням</h2>
+
+        {chartData.every((day) => day.amount === 0) ? (
+          <p className="empty">
+            За этот месяц расходов нет.
+          </p>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: 300,
+            }}
+          >
+            <ResponsiveContainer>
+              <BarChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                />
+
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) =>
+                    Number(value).toLocaleString("ru-RU")
+                  }
+                />
+
+                <Tooltip
+                  formatter={(value) =>
+                    `${Number(value).toLocaleString("ru-RU")} ₽`
+                  }
+                  labelFormatter={(day) =>
+                    `День ${day}`
+                  }
+                />
+
+                <Bar
+                  dataKey="amount"
+                  name="Расходы"
+                  radius={[5, 5, 0, 0]}
+                  maxBarSize={28}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
       {/* Самый большой расход */}
 
       {largestExpense && (
