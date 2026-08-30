@@ -12,6 +12,7 @@ import {
 } from "../types/expense";
 
 import { supabase } from "../lib/supabaseClient";
+import BudgetCard from "../components/BudgetCard";
 
 import {
   getTotal,
@@ -413,6 +414,12 @@ function Expenses() {
           </small>
         </button>
       </section>
+
+      <BudgetCard
+        year={selectedYear}
+        month={selectedMonth}
+        spent={monthTotal}
+      />
 
       <section className="summary">
         <div className="summary-card">
