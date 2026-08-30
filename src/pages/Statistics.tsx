@@ -25,12 +25,17 @@ import { monthNames } from "../utils/dates";
 
 import { loadExpenses } from "../utils/storage";
 import {
+  Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import {
   BarChart,
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   CartesianGrid,
 } from "recharts";
 
@@ -165,6 +170,18 @@ function Statistics() {
     getLargestExpense(
       monthExpenses,
     );
+
+  const categoryChartData = useMemo(
+    () =>
+      categoryTotals
+        .filter((item) => item.total > 0)
+        .map((item) => ({
+          name: item.category,
+          value: item.total,
+          icon: categoryIcons[item.category],
+        })),
+    [categoryTotals],
+  );
 
   const uniqueDays = new Set(
     monthExpenses.map(
@@ -623,6 +640,104 @@ function Statistics() {
               },
             )}
           </div>
+        )}
+      </section>
+
+      {/* График расходов по категориям */}
+      <section className="card">
+        <h2>Расходы по категориям</h2>
+
+        {categoryChartData.length === 0 ? (
+          <p className="empty">
+            За этот месяц расходов нет.
+          </p>
+        ) : (
+          <>
+            <div
+              style={{
+                width: "100%",
+                height: 280,
+              }}
+            >
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={categoryChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={105}
+                    paddingAngle={2}
+                  >
+                    {categoryChartData.map(
+                      (entry) => (
+                        <Cell key={entry.name} />
+                      ),
+                    )}
+                  </Pie>
+
+                  <Tooltip
+                    formatter={(value) =>
+                      `${Number(value).toLocaleString(
+                        "ru-RU",
+                      )} ₽`
+                    }
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="statistics-list">
+              {categoryChartData.map(
+                (item) => {
+                  const percentage =
+                    total > 0
+                      ? (item.value / total) * 100
+                      : 0;
+
+                  return (
+                    <div
+                      className="statistic-item"
+                      key={item.name}
+                    >
+                      <div className="statistic-header">
+                        <div>
+                          <span>
+                            {item.icon}
+                          </span>
+                          <strong>
+                            {item.name}
+                          </strong>
+                        </div>
+
+                        <strong>
+                          {item.value.toLocaleString(
+                            "ru-RU",
+                          )}{" "}
+                          ₽
+                        </strong>
+                      </div>
+
+                      <div className="progress">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${percentage}%`,
+                          }}
+                        />
+                      </div>
+
+                      <span className="percentage">
+                        {percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          </>
         )}
       </section>
 
