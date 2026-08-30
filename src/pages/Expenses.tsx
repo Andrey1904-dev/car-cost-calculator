@@ -32,6 +32,7 @@ import {
   loadExpenses,
   addExpenseToSupabase,
   deleteExpenseFromSupabase,
+  updateExpenseInSupabase,
 } from "../utils/storage";
 
 type ExpenseFilter = "all" | UserName;
@@ -60,6 +61,24 @@ function Expenses() {
     useState(true);
 
   const [adding, setAdding] =
+    useState(false);
+
+  const [editingExpense, setEditingExpense] =
+    useState<Expense | null>(null);
+
+  const [editAmount, setEditAmount] =
+    useState("");
+
+  const [editCategory, setEditCategory] =
+    useState<Category>("Продукты");
+
+  const [editComment, setEditComment] =
+    useState("");
+
+  const [editDate, setEditDate] =
+    useState(today);
+
+  const [savingEdit, setSavingEdit] =
     useState(false);
 
   const [amount, setAmount] =
@@ -269,6 +288,76 @@ function Expenses() {
     setExpenses(updatedExpenses);
 
     setAdding(false);
+  }
+
+  function startEditingExpense(expense: Expense) {
+    setEditingExpense(expense);
+    setEditAmount(String(expense.amount));
+    setEditCategory(expense.category);
+    setEditComment(expense.comment);
+    setEditDate(expense.date);
+  }
+
+  function cancelEditingExpense() {
+    if (savingEdit) {
+      return;
+    }
+
+    setEditingExpense(null);
+  }
+
+  async function saveEditedExpense() {
+    if (!editingExpense || savingEdit) {
+      return;
+    }
+
+    const numericAmount = Number(
+      editAmount.replace(/\\s/g, "").replace(",", "."),
+    );
+
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
+      alert("Введите корректную сумму.");
+      return;
+    }
+
+    if (!editDate) {
+      alert("Выберите дату.");
+      return;
+    }
+
+    setSavingEdit(true);
+
+    const updatedExpense =
+      await updateExpenseInSupabase(
+        editingExpense.id,
+        {
+          userName: editingExpense.userName,
+          amount: numericAmount,
+          category: editCategory,
+          date: editDate,
+          comment: editComment.trim(),
+        },
+      );
+
+    setSavingEdit(false);
+
+    if (!updatedExpense) {
+      alert("Не удалось сохранить изменения.");
+      return;
+    }
+
+    setExpenses((currentExpenses) =>
+      currentExpenses.map((expense) =>
+        expense.id === updatedExpense.id
+          ? updatedExpense
+          : expense,
+      ),
+    );
+
+    setEditingExpense(null);
   }
 
   async function deleteExpense(
@@ -721,6 +810,97 @@ function Expenses() {
         </section>
       )}
 
+      {editingExpense && (
+        <section className="card edit-expense-card">
+          <div className="budget-header">
+            <div>
+              <h2>✏️ Редактирование расхода</h2>
+              <p className="budget-subtitle">
+                Измените нужные данные
+              </p>
+            </div>
+          </div>
+
+          <div className="expense-form">
+            <label>
+              Сумма
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={editAmount}
+                onChange={(event) =>
+                  setEditAmount(event.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              Категория
+              <select
+                value={editCategory}
+                onChange={(event) =>
+                  setEditCategory(
+                    event.target.value as Category,
+                  )
+                }
+              >
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {categoryIcons[item]} {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Дата
+              <input
+                type="date"
+                value={editDate}
+                onChange={(event) =>
+                  setEditDate(event.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              Комментарий
+              <input
+                type="text"
+                value={editComment}
+                placeholder="Необязательно"
+                onChange={(event) =>
+                  setEditComment(event.target.value)
+                }
+              />
+            </label>
+
+            <div className="edit-expense-actions">
+              <button
+                type="button"
+                className="add-button"
+                onClick={saveEditedExpense}
+                disabled={savingEdit}
+              >
+                {savingEdit
+                  ? "Сохраняем..."
+                  : "Сохранить изменения"}
+              </button>
+
+              <button
+                type="button"
+                className="budget-edit-button"
+                onClick={cancelEditingExpense}
+                disabled={savingEdit}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="expenses-section">
         <h2>
           Все расходы за{" "}
@@ -797,6 +977,16 @@ function Expenses() {
                       ₽
                     </strong>
 
+                    <button
+                      type="button"
+                      className="edit-expense-button"
+                      onClick={() =>
+                        startEditingExpense(expense)
+                      }
+                      aria-label="Редактировать расход"
+                    >
+                      ✎
+                    </button>
                     <button
                       type="button"
                       className="delete-button"

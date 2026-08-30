@@ -104,3 +104,34 @@ export async function deleteExpenseFromSupabase(
 
   return true;
 }
+
+export async function updateExpenseInSupabase(
+  id: number,
+  expense: Omit<Expense, "id">,
+): Promise<Expense | null> {
+  const { data, error } = await supabase
+    .from("expenses")
+    .update({
+      user_name: expense.userName,
+      amount: expense.amount,
+      category: expense.category,
+      expense_date: expense.date,
+      comment: expense.comment,
+    })
+    .eq("id", id)
+    .select(
+      "id, user_name, amount, category, expense_date, comment, created_at",
+    )
+    .single();
+
+  if (error) {
+    console.error(
+      "Ошибка обновления расхода:",
+      error,
+    );
+    return null;
+  }
+
+  return mapExpense(data as SupabaseExpense);
+}
+
