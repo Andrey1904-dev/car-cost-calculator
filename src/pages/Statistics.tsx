@@ -565,85 +565,6 @@ function Statistics() {
       </section>
 
       {/* Категории */}
-
-      <section className="card">
-        <h2>
-          Расходы по категориям
-        </h2>
-
-        {categoryTotals.length ===
-        0 ? (
-          <p className="empty">
-            За этот месяц
-            расходов нет.
-          </p>
-        ) : (
-          <div className="statistics-list">
-            {categoryTotals.map(
-              (item) => {
-                const percentage =
-                  total > 0
-                    ? (item.total /
-                        total) *
-                      100
-                    : 0;
-
-                return (
-                  <div
-                    className="statistic-item"
-                    key={
-                      item.category
-                    }
-                  >
-                    <div className="statistic-header">
-                      <div>
-                        <span>
-                          {
-                            categoryIcons[
-                              item.category
-                            ]
-                          }
-                        </span>
-
-                        <strong>
-                          {
-                            item.category
-                          }
-                        </strong>
-                      </div>
-
-                      <strong>
-                        {item.total.toLocaleString(
-                          "ru-RU",
-                        )}{" "}
-                        ₽
-                      </strong>
-                    </div>
-
-                    <div className="progress">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${percentage}%`,
-                        }}
-                      />
-                    </div>
-
-                    <span className="percentage">
-                      {percentage.toFixed(
-                        1,
-                      )}
-                      %
-                    </span>
-                  </div>
-                );
-              },
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* График расходов по категориям */}
       <section className="card">
         <h2>Расходы по категориям</h2>
 
@@ -671,18 +592,14 @@ function Statistics() {
                     outerRadius={105}
                     paddingAngle={2}
                   >
-                    {categoryChartData.map(
-                      (entry) => (
-                        <Cell key={entry.name} />
-                      ),
-                    )}
+                    {categoryChartData.map((entry) => (
+                      <Cell key={entry.name} />
+                    ))}
                   </Pie>
 
                   <Tooltip
                     formatter={(value) =>
-                      `${Number(value).toLocaleString(
-                        "ru-RU",
-                      )} ₽`
+                      `${Number(value).toLocaleString("ru-RU")} ₽`
                     }
                   />
                 </PieChart>
@@ -690,57 +607,47 @@ function Statistics() {
             </div>
 
             <div className="statistics-list">
-              {categoryChartData.map(
-                (item) => {
-                  const percentage =
-                    total > 0
-                      ? (item.value / total) * 100
-                      : 0;
+              {categoryChartData.map((item) => {
+                const percentage =
+                  total > 0
+                    ? (item.value / total) * 100
+                    : 0;
 
-                  return (
-                    <div
-                      className="statistic-item"
-                      key={item.name}
-                    >
-                      <div className="statistic-header">
-                        <div>
-                          <span>
-                            {item.icon}
-                          </span>
-                          <strong>
-                            {item.name}
-                          </strong>
-                        </div>
-
-                        <strong>
-                          {item.value.toLocaleString(
-                            "ru-RU",
-                          )}{" "}
-                          ₽
-                        </strong>
+                return (
+                  <div
+                    className="statistic-item"
+                    key={item.name}
+                  >
+                    <div className="statistic-header">
+                      <div>
+                        <span>{item.icon}</span>
+                        <strong>{item.name}</strong>
                       </div>
 
-                      <div className="progress">
-                        <div
-                          className="progress-fill"
-                          style={{
-                            width: `${percentage}%`,
-                          }}
-                        />
-                      </div>
-
-                      <span className="percentage">
-                        {percentage.toFixed(1)}%
-                      </span>
+                      <strong>
+                        {item.value.toLocaleString("ru-RU")} ₽
+                      </strong>
                     </div>
-                  );
-                },
-              )}
+
+                    <div className="progress">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+                    </div>
+
+                    <span className="percentage">
+                      {percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
       </section>
-
       {/* Самый большой расход */}
 
       {largestExpense && (
