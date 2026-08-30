@@ -81,13 +81,27 @@ function BudgetCard({
 
   const remaining = budget - spent;
 
+  const rawProgress =
+    budget > 0
+      ? (spent / budget) * 100
+      : 0;
+
   const progress =
     budget > 0
-      ? Math.min((spent / budget) * 100, 100)
+      ? Math.min(rawProgress, 100)
       : 0;
 
   const exceeded =
     budget > 0 && spent > budget;
+
+  const budgetStatus =
+    exceeded
+      ? "🔴 Бюджет превышен"
+      : rawProgress >= 90
+        ? "🟠 Бюджет почти исчерпан"
+        : rawProgress >= 70
+          ? "🟡 Расходуйте осторожнее"
+          : "🟢 Всё под контролем";
 
   const now = new Date();
 
@@ -233,14 +247,12 @@ function BudgetCard({
                 className={
                   exceeded
                     ? "budget-warning"
-                    : "budget-status"
+                    : rawProgress >= 90
+                      ? "budget-warning"
+                      : "budget-status"
                 }
               >
-                {exceeded
-                  ? "🔴 Бюджет превышен"
-                  : progress >= 80
-                    ? "🟠 Бюджет почти исчерпан"
-                    : "🟢 Всё под контролем"}
+                {budgetStatus}
               </p>
 
               {isCurrentMonth && (
